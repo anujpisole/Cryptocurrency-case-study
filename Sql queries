@@ -169,3 +169,29 @@ order by market_date desc ;
 -- change in DCA for each region to 2 decimal places This calculation is (current - previous) / previous Finally
 --  order the output by region and year_start columns.
 
+
+select * from members;
+select * from prices;
+select * from transactions;
+
+with dollar_avg as (
+select year(market_date) as year_start,region,SUM(quantity * price) / SUM(quantity) as btc_dca
+from members m join transactions t 
+on m.member_id = t.member_id
+join prices p 
+on p.ticker = t.ticker
+where t.ticker = 'BTC' and t.txn_type='BUY'
+group by year_start,region
+) 
+, window_rank as (
+select year_start,region,btc_dca,
+	   rank() over(partition by year_start order by btc_dca ) as dca_ranking,
+       lag(btc_dca) over(partition by region order by year_start) as pre_btc_dca
+       from dollar_avg       
+)
+
+select year_start,region,btc_dca,dca_ranking,
+	   round((btc_dca - pre_btc_dca) / pre_btc_dca,2) as percent_change
+       from window_rank
+	order by region,year_start;
+
